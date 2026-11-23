@@ -82,6 +82,41 @@ jobs:
             throw "LLVM version check failed"
           }
 
+      - name: Patch Clang prefetch pointer compatibility
+        shell: pwsh
+        run: |
+          $file = "ggml/src/ggml-cpu/arch/x86/quants.c"
+
+          if (!(Test-Path $file)) {
+            throw "quants.c not found"
+          }
+
+          $source = Get-Content $file -Raw
+
+          $replacements = @{
+            '_mm_prefetch(&x[ib] + sizeof(block_q4_0)' = '_mm_prefetch((const char *)&x[ib] + sizeof(block_q4_0)'
+            '_mm_prefetch(&y[ib] + sizeof(block_q8_0)' = '_mm_prefetch((const char *)&y[ib] + sizeof(block_q8_0)'
+            '_mm_prefetch(&x[ib] + 2 * sizeof(block_q4_0)' = '_mm_prefetch((const char *)&x[ib] + 2 * sizeof(block_q4_0)'
+            '_mm_prefetch(&y[ib] + 2 * sizeof(block_q8_0)' = '_mm_prefetch((const char *)&y[ib] + 2 * sizeof(block_q8_0)'
+          }
+
+          foreach ($old in $replacements.Keys) {
+            if (!$source.Contains($old)) {
+              throw "Expected source expression not found: $old"
+            }
+
+            $source = $source.Replace($old, $replacements[$old])
+          }
+
+          Set-Content -Path $file -Value $source -NoNewline
+
+          Write-Host "=== PATCH VERIFICATION ==="
+          Select-String -Path $file -Pattern '_mm_prefetch'
+
+          if ((Select-String -Path $file -Pattern '\(const char \*\)&[xy]\[ib\]' ).Count -lt 4) {
+            throw "Patch verification failed"
+          }
+
       - name: Configure CMake
         shell: pwsh
         run: |
