@@ -56,6 +56,32 @@ jobs:
             throw "Ninja installation failed"
           }
 
+      - name: Install compatible LLVM 22
+        shell: pwsh
+        run: |
+          choco upgrade llvm --version=22.1.8 --yes --no-progress
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "LLVM 22 installation failed"
+          }
+
+          $llvmBin = "C:\Program Files\LLVM\bin"
+
+          if (!(Test-Path "$llvmBin\clang++.exe")) {
+            throw "clang++.exe not found"
+          }
+
+          "$llvmBin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+          $env:PATH = "$llvmBin;$env:PATH"
+
+          Write-Host "=== LLVM VERSION ==="
+          & "$llvmBin\clang++.exe" --version
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "LLVM version check failed"
+          }
+
       - name: Configure CMake
         shell: pwsh
         run: |
